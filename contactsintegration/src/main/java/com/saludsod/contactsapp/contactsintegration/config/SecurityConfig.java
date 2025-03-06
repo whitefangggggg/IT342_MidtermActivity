@@ -25,6 +25,12 @@ public class SecurityConfig {
                 .loginPage("/oauth2/authorization/google") // Redirect to Google's OAuth2 login
                 .defaultSuccessUrl("/contacts", true) // Redirect to contacts after login
             )
+            .logout(logout -> logout
+                .logoutUrl("/logout") // Ensure logout is triggered by visiting /logout
+                .logoutSuccessUrl("/") // Redirect to home page after logout
+                .invalidateHttpSession(true) // Clear session
+                .deleteCookies("JSESSIONID") // Remove session cookies
+            )
             .csrf(csrf -> csrf.ignoringRequestMatchers("/contacts/add", "/contacts/edit/**", "/contacts/delete/**")) // Disable CSRF for these endpoints
             .sessionManagement(session -> session.sessionCreationPolicy(IF_REQUIRED)); // Maintain session for OAuth2
 

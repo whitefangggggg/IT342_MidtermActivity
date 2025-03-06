@@ -26,48 +26,65 @@ public class ContactsController {
     public String getContacts(Model model, OAuth2AuthenticationToken authentication) {
         try {
             String jsonResponse = googleContactsService.getContacts(authentication);
-
             String username = authentication.getPrincipal().getAttribute("name");
             if (username == null) {
-                username = "User"; // Fallback if name is not available
+                username = "User";
             }
 
             ObjectMapper objectMapper = new ObjectMapper();
             JsonNode root = objectMapper.readTree(jsonResponse);
-
-            List<Map<String, String>> contacts = new ArrayList<>();
+            List<Map<String, Object>> contacts = new ArrayList<>();
 
             if (root.has("connections")) {
                 for (JsonNode connection : root.get("connections")) {
-                    String name = connection.has("names") ? 
-                                  connection.get("names").get(0).get("displayName").asText() : 
-                                  "Unknown";
+                    String firstName = connection.has("names") ? connection.get("names").get(0).get("givenName").asText() : "";
+                    String lastName = connection.has("names") && connection.get("names").get(0).has("familyName") ? connection.get("names").get(0).get("familyName").asText() : "";
+                    
+                    List<String> emails = new ArrayList<>();
+                    if (connection.has("emailAddresses")) {
+                        for (JsonNode emailNode : connection.get("emailAddresses")) {
+                            emails.add(emailNode.get("value").asText());
+                        }
+                    }
+                    
+                    List<String> phones = new ArrayList<>();
+                    if (connection.has("phoneNumbers")) {
+                        for (JsonNode phoneNode : connection.get("phoneNumbers")) {
+                            phones.add(phoneNode.get("value").asText());
+                        }
+                    }
 
-                    String email = connection.has("emailAddresses") ? 
-                                   connection.get("emailAddresses").get(0).get("value").asText() : 
-                                   "No email";
+                    String profilePicture = connection.has("photos") ? connection.get("photos").get(0).get("url").asText() : "/default-profile.png";
+                    String resourceName = connection.has("resourceName") ? connection.get("resourceName").asText() : "";
 
-                    String phone = connection.has("phoneNumbers") ? 
-                                   connection.get("phoneNumbers").get(0).get("value").asText() : 
-                                   "No phone";
+                    // Determine display name
+                    String displayName;
+                    if (!firstName.isEmpty() || !lastName.isEmpty()) {
+                        displayName = (firstName + " " + lastName).trim();
+                    } else if (!emails.isEmpty()) {
+                        displayName = emails.get(0); // Use email if available
+                    } else if (!phones.isEmpty()) {
+                        displayName = phones.get(0); // Use phone if no email
+                    } else {
+                        displayName = "Unknown"; // Fallback if no name, email, or phone
+                    }
 
-                    String resourceName = connection.has("resourceName") ? 
-                                          connection.get("resourceName").asText() : 
-                                          "";
-
-                    // Generate initials for profile icon
-                    String[] nameParts = name.split(" ");
-                    String initials = nameParts.length > 1 ? 
-                                      nameParts[0].substring(0, 1) + nameParts[1].substring(0, 1) : 
-                                      nameParts[0].substring(0, 1);
-                    initials = initials.toUpperCase();
+                    // Debug logging
+                    System.out.println("Contact: " + resourceName);
+                    System.out.println("First Name: " + firstName);
+                    System.out.println("Last Name: " + lastName);
+                    System.out.println("Emails: " + emails);
+                    System.out.println("Phones: " + phones);
+                    System.out.println("Display Name: " + displayName);
 
                     contacts.add(Map.of(
-                        "name", name, 
-                        "email", email, 
-                        "phone", phone,
-                        "initial", initials,
-                        "resourceName", resourceName // Needed for update/delete
+                        "firstName", firstName,
+                        "lastName", lastName,
+                        "displayName", displayName,
+                        "emails", emails,
+                        "phones", phones,
+                        "profilePicture", profilePicture,
+                        "resourceName", resourceName
                     ));
                 }
             }
@@ -82,58 +99,50 @@ public class ContactsController {
     }
 
     @PostMapping("/add")
-    public String createContact(@RequestParam String name, 
-                                @RequestParam String email, 
-                                @RequestParam String phone, 
-                                OAuth2AuthenticationToken authentication, 
+    public String createContact(@RequestParam String firstName,
+                                @RequestParam String lastName,
+                                @RequestParam(required = false) List<String> emails,
+                                @RequestParam(required = false) List<String> phones,
+                                OAuth2AuthenticationToken authentication,
                                 Model model) {
         try {
-            googleContactsService.createContact(authentication, name, email, phone);
+            String response = googleContactsService.createContact(authentication, firstName, lastName, emails != null ? emails : new ArrayList<>(), phones != null ? phones : new ArrayList<>());
             model.addAttribute("message", "Contact added successfully!");
         } catch (Exception e) {
             model.addAttribute("message", "Failed to add contact: " + e.getMessage());
         }
-        return "redirect:/contacts"; // Refresh the contacts list
+        return "redirect:/contacts";
     }
 
     @PostMapping("/edit")
-    public String updateContact(@RequestParam String resourceName, 
-                                @RequestParam String name, 
-                                @RequestParam String email, 
-                                @RequestParam String phone, 
-                                OAuth2AuthenticationToken authentication, 
+    public String updateContact(@RequestParam String resourceName,
+                                @RequestParam String firstName,
+                                @RequestParam String lastName,
+                                @RequestParam(required = false) List<String> emails,
+                                @RequestParam(required = false) List<String> phones,
+                                OAuth2AuthenticationToken authentication,
                                 Model model) {
         try {
-            // Delete old contact
             googleContactsService.deleteContact(authentication, resourceName);
-            
-            // Add updated contact
-            googleContactsService.createContact(authentication, name, email, phone);
-            
+            String response = googleContactsService.createContact(authentication, firstName, lastName, emails != null ? emails : new ArrayList<>(), phones != null ? phones : new ArrayList<>());
             model.addAttribute("message", "Contact updated successfully!");
         } catch (Exception e) {
             model.addAttribute("message", "Failed to update contact: " + e.getMessage());
         }
-
-        return "redirect:/contacts"; // Refresh the contacts list
+        return "redirect:/contacts";
     }
 
     @PostMapping("/delete")
-public String deleteContact(@RequestParam String resourceName, 
-                            OAuth2AuthenticationToken authentication, 
-                            Model model) {
-    System.out.println("Attempting to delete contact with resourceName: " + resourceName); // Debug log
-
-    try {
-        String response = googleContactsService.deleteContact(authentication, resourceName);
-        System.out.println("Delete response: " + response);
-    } catch (Exception e) {
-        System.out.println("Error deleting contact: " + e.getMessage());
-        model.addAttribute("error", "Failed to delete contact: " + e.getMessage());
+    public String deleteContact(@RequestParam String resourceName,
+                                OAuth2AuthenticationToken authentication,
+                                Model model) {
+        try {
+            String response = googleContactsService.deleteContact(authentication, resourceName);
+            System.out.println("Delete response: " + response);
+        } catch (Exception e) {
+            System.out.println("Error deleting contact: " + e.getMessage());
+            model.addAttribute("error", "Failed to delete contact: " + e.getMessage());
+        }
+        return "redirect:/contacts";
     }
-
-    return "redirect:/contacts"; 
-}
-
-
 }
