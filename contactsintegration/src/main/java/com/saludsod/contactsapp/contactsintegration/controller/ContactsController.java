@@ -82,34 +82,58 @@ public class ContactsController {
     }
 
     @PostMapping("/add")
-    public String createContact(@RequestParam String name, @RequestParam String email, @RequestParam String phone, OAuth2AuthenticationToken authentication, Model model) {
-        String response = googleContactsService.createContact(authentication, name, email, phone);
-        model.addAttribute("message", response);
+    public String createContact(@RequestParam String name, 
+                                @RequestParam String email, 
+                                @RequestParam String phone, 
+                                OAuth2AuthenticationToken authentication, 
+                                Model model) {
+        try {
+            googleContactsService.createContact(authentication, name, email, phone);
+            model.addAttribute("message", "Contact added successfully!");
+        } catch (Exception e) {
+            model.addAttribute("message", "Failed to add contact: " + e.getMessage());
+        }
         return "redirect:/contacts"; // Refresh the contacts list
     }
 
-    @PutMapping("/edit")
-    public String updateContact(@RequestParam String resourceName, @RequestParam String name, @RequestParam String email, @RequestParam String phone, OAuth2AuthenticationToken authentication, Model model) {
-        String response = googleContactsService.updateContact(authentication, resourceName, name, email, phone);
-        model.addAttribute("message", response);
-        return "redirect:/contacts";
+    @PostMapping("/edit")
+    public String updateContact(@RequestParam String resourceName, 
+                                @RequestParam String name, 
+                                @RequestParam String email, 
+                                @RequestParam String phone, 
+                                OAuth2AuthenticationToken authentication, 
+                                Model model) {
+        try {
+            // Delete old contact
+            googleContactsService.deleteContact(authentication, resourceName);
+            
+            // Add updated contact
+            googleContactsService.createContact(authentication, name, email, phone);
+            
+            model.addAttribute("message", "Contact updated successfully!");
+        } catch (Exception e) {
+            model.addAttribute("message", "Failed to update contact: " + e.getMessage());
+        }
+
+        return "redirect:/contacts"; // Refresh the contacts list
     }
 
-    // This method handles the deletion of contacts. Make sure the form sends a DELETE request.
-    @RequestMapping(value = "/delete", method = RequestMethod.POST)
-public String deleteContact(@RequestParam String resourceName, OAuth2AuthenticationToken authentication, Model model) {
+    @PostMapping("/delete")
+public String deleteContact(@RequestParam String resourceName, 
+                            OAuth2AuthenticationToken authentication, 
+                            Model model) {
+    System.out.println("Attempting to delete contact with resourceName: " + resourceName); // Debug log
+
     try {
-        // Pass the resourceName to the service for deleting the contact
         String response = googleContactsService.deleteContact(authentication, resourceName);
-        
-        // Add the response message to be shown to the user
-        model.addAttribute("message", response);
+        System.out.println("Delete response: " + response);
     } catch (Exception e) {
-        // If there's an error, display the error message
-        model.addAttribute("message", "Failed to delete contact: " + e.getMessage());
+        System.out.println("Error deleting contact: " + e.getMessage());
+        model.addAttribute("error", "Failed to delete contact: " + e.getMessage());
     }
-    
-    // Redirect back to the contacts list
-    return "redirect:/contacts";
+
+    return "redirect:/contacts"; 
 }
+
+
 }

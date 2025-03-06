@@ -18,7 +18,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/contacts").authenticated() // View contacts
                 .requestMatchers(HttpMethod.POST, "/contacts/add").authenticated() // Add contact
                 .requestMatchers(HttpMethod.PUT, "/contacts/edit/**").authenticated() // Edit contact
-                .requestMatchers(HttpMethod.DELETE, "/contacts/delete/**").authenticated() // Delete contact
+                .requestMatchers(HttpMethod.POST, "/contacts/delete/**").authenticated() // Delete contact
                 .anyRequest().authenticated() // Other requests require authentication
             )
             .oauth2Login(oauth2 -> oauth2
